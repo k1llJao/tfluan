@@ -62,18 +62,21 @@ class Status:
     CANCELADO = "C"
 
     def __init__(self, codigo="A"):
-        self.codigo = codigo
+        self._codigo = codigo
 
     def descricao(self):
-        if self.codigo == Status.ABERTO:
+        if self._codigo == Status.ABERTO:
             return "aberto"
-        elif self.codigo == Status.PAGO:
+        elif self._codigo == Status.PAGO:
             return "pago"
         else:
             return "cancelado"
 
     def esta_aberto(self):
-        return self.codigo == Status.ABERTO
+        return self._codigo == Status.ABERTO
+
+    def esta_pago(self):
+        return self._codigo == Status.PAGO
 
 
 class Pessoa:
@@ -96,6 +99,12 @@ class Cliente:
         self.endereco = Endereco(rua, cidade, cep)
         self.tipo = tipo          # tipo do cliente: "N" normal, "V" vip, "F" funcionario
 
+    def nome_da_pessoa(self):
+        return self.pessoa.nome
+
+    def cidade_do_endereco(self):
+        return self.endereco.cidade
+
 
 class Produto:
     def __init__(self, nome, preco):
@@ -107,6 +116,12 @@ class ItemDoPedido:
     def __init__(self, produto, quantidade):
         self.produto = produto
         self.quantidade = quantidade
+
+    def calcular_subtotal(self):
+        return self.produto.preco.multiplicar(self.quantidade)
+
+    def imprimir(self):
+        print("  ", self.quantidade, "x", self.produto.nome, "=", self.calcular_subtotal())
 
 
 class ItensDoPedido:
@@ -122,25 +137,34 @@ class ItensDoPedido:
     def calcular_total(self):
         total_acumulado = Dinheiro(0)
         for item in self._itens:
-            total_acumulado = total_acumulado.somar(item.produto.preco.multiplicar(item.quantidade))
+            total_acumulado = total_acumulado.somar(item.calcular_subtotal())
         return total_acumulado
 
     def imprimir(self):
         for item in self._itens:
-            print("  ", item.quantidade, "x", item.produto.nome, "=", item.produto.preco.multiplicar(item.quantidade))
+            item.imprimir()
 
 
 class Pedido:
     def __init__(self, cliente):
         self.cliente = cliente
         self.itens = ItensDoPedido()
-        self.status = Status()
+        self._status = Status()
 
-    def get_status(self):
-        return self.status
+    def nome_do_cliente(self):
+        return self.cliente.nome_da_pessoa()
 
-    def set_status(self, codigo):
-        self.status = Status(codigo)
+    def cidade_do_cliente(self):
+        return self.cliente.cidade_do_endereco()
+
+    def descricao_do_status(self):
+        return self._status.descricao()
+
+    def esta_aberto(self):
+        return self._status.esta_aberto()
+
+    def esta_pago(self):
+        return self._status.esta_pago()
 
     def calcular_desconto(self):
         total_acumulado = self.itens.calcular_total()
@@ -154,24 +178,22 @@ class Pedido:
     def calcular_valor_a_pagar(self):
         return self.itens.calcular_total().subtrair(self.calcular_desconto())
 
+    def pagar(self):
+        if self._status.esta_aberto():
+            if not self.itens.esta_vazia():
+                self._status = Status(Status.PAGO)
+                return True
+            else:
+                return False
+        else:
+            return False
 
-def pagar(pedido):
-    if pedido.get_status().esta_aberto():
-        if not pedido.itens.esta_vazia():
-            pedido.set_status("P")
+    def cancelar(self):
+        if self._status.esta_aberto():
+            self._status = Status(Status.CANCELADO)
             return True
         else:
             return False
-    else:
-        return False
-
-
-def cancelar(pedido):
-    if pedido.get_status().esta_aberto():
-        pedido.set_status("C")
-        return True
-    else:
-        return False
 
 
 class Pedidos:
@@ -185,8 +207,8 @@ class Pedidos:
 
     def relatorio(self):
         for numero, pedido in self._pedidos.items():
-            print("Pedido", numero, "-", pedido.cliente.pessoa.nome, "-", pedido.cliente.endereco.cidade)
-            print("  status:", pedido.get_status().descricao())
+            print("Pedido", numero, "-", pedido.nome_do_cliente(), "-", pedido.cidade_do_cliente())
+            print("  status:", pedido.descricao_do_status())
             pedido.itens.imprimir()
             if not pedido.itens.esta_vazia():
                 print("  total:", pedido.itens.calcular_total(), "| desconto:", pedido.calcular_desconto(), "| a pagar:", pedido.calcular_valor_a_pagar())
@@ -194,14 +216,14 @@ class Pedidos:
     def arrecadado(self):
         total_arrecadado = Dinheiro(0)
         for pedido in self._pedidos.values():
-            if pedido.get_status().codigo == Status.PAGO:
+            if pedido.esta_pago():
                 total_arrecadado = total_arrecadado.somar(pedido.calcular_valor_a_pagar())
         return total_arrecadado
 
     def qtd_abertos(self):
         quantidade = 0
         for pedido in self._pedidos.values():
-            if pedido.get_status().esta_aberto():
+            if pedido.esta_aberto():
                 quantidade = quantidade + 1
         return quantidade
 
@@ -271,12 +293,12 @@ except ValueError as erro:
     print("pedido 8 recusado:", erro)
     pedido_do_gil = None
 
-print("pagar 1:", pagar(pedido_da_ana))
-print("pagar 3:", pagar(pedido_da_ana_2))
-print("pagar 5:", pagar(pedido_do_diego))
-print("pagar 6:", pagar(pedido_da_eva))
-print("cancelar 5:", cancelar(pedido_do_diego))
-print("cancelar 1:", cancelar(pedido_da_ana))
+print("pagar 1:", pedido_da_ana.pagar())
+print("pagar 3:", pedido_da_ana_2.pagar())
+print("pagar 5:", pedido_do_diego.pagar())
+print("pagar 6:", pedido_da_eva.pagar())
+print("cancelar 5:", pedido_do_diego.cancelar())
+print("cancelar 1:", pedido_da_ana.cancelar())
 
 loja.relatorio()
 print("arrecadado:", loja.arrecadado())
