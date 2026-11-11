@@ -76,14 +76,24 @@ class Status:
         return self.codigo == Status.ABERTO
 
 
-class Cliente:
-    def __init__(self, nome, cpf, email, rua, cidade, cep, tipo):
+class Pessoa:
+    def __init__(self, nome, cpf, email):
         self.nome = nome
         self.cpf = Cpf(cpf)
         self.email = Email(email)
+
+
+class Endereco:
+    def __init__(self, rua, cidade, cep):
         self.rua = rua
         self.cidade = cidade
         self.cep = Cep(cep)
+
+
+class Cliente:
+    def __init__(self, nome, cpf, email, rua, cidade, cep, tipo):
+        self.pessoa = Pessoa(nome, cpf, email)
+        self.endereco = Endereco(rua, cidade, cep)
         self.tipo = tipo          # tipo do cliente: "N" normal, "V" vip, "F" funcionario
 
 
@@ -175,7 +185,7 @@ class Pedidos:
 
     def relatorio(self):
         for numero, pedido in self._pedidos.items():
-            print("Pedido", numero, "-", pedido.cliente.nome, "-", pedido.cliente.cidade)
+            print("Pedido", numero, "-", pedido.cliente.pessoa.nome, "-", pedido.cliente.endereco.cidade)
             print("  status:", pedido.get_status().descricao())
             pedido.itens.imprimir()
             if not pedido.itens.esta_vazia():
