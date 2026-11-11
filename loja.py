@@ -2,8 +2,6 @@
 # Object Calisthenics. A missao e consertar SEM mudar o que ele imprime.
 # Rodar no terminal: python3 loja_feia.py
 
-pedidos = []                      # todos os pedidos da loja: lista solta, global
-
 
 class Cpf:
     def __init__(self, valor):
@@ -101,12 +99,32 @@ class ItemDoPedido:
         self.quantidade = quantidade
 
 
+class ItensDoPedido:
+    def __init__(self):
+        self._itens = []
+
+    def adicionar(self, produto, quantidade):
+        self._itens.append(ItemDoPedido(produto, quantidade))
+
+    def esta_vazia(self):
+        return len(self._itens) == 0
+
+    def calcular_total(self):
+        total_acumulado = Dinheiro(0)
+        for item in self._itens:
+            total_acumulado = total_acumulado.somar(item.produto.preco.multiplicar(item.quantidade))
+        return total_acumulado
+
+    def imprimir(self):
+        for item in self._itens:
+            print("  ", item.quantidade, "x", item.produto.nome, "=", item.produto.preco.multiplicar(item.quantidade))
+
+
 class Pedido:
-    def __init__(self, numero, cliente):
-        self.numero = numero
+    def __init__(self, cliente):
         self.cliente = cliente
-        self.itens = []           # lista de ItemDoPedido
-        self.status = Status()    # inicia como aberto
+        self.itens = ItensDoPedido()
+        self.status = Status()
 
     def get_status(self):
         return self.status
@@ -114,41 +132,22 @@ class Pedido:
     def set_status(self, codigo):
         self.status = Status(codigo)
 
+    def calcular_desconto(self):
+        total_acumulado = self.itens.calcular_total()
+        if self.cliente.tipo == "V":
+            return total_acumulado.percentual(0.10)
+        elif self.cliente.tipo == "F":
+            return total_acumulado.percentual(0.20)
+        else:
+            return Dinheiro(0)
 
-def novo_pedido(numero, cliente):
-    pedido = Pedido(numero, cliente)
-    pedidos.append(pedido)
-    return pedido
-
-
-def add_item(pedido, produto, quantidade):
-    pedido.itens.append(ItemDoPedido(produto, quantidade))
-
-
-def total(pedido):
-    total_acumulado = Dinheiro(0)
-    for item in pedido.itens:
-        total_acumulado = total_acumulado.somar(item.produto.preco.multiplicar(item.quantidade))
-    return total_acumulado
-
-
-def calcular_desconto(tipo, total_acumulado):
-    if tipo == "V":
-        desconto = total_acumulado.percentual(0.10)
-    elif tipo == "F":
-        desconto = total_acumulado.percentual(0.20)
-    else:
-        desconto = Dinheiro(0)
-    return desconto
-
-
-def calcular_valor_a_pagar(pedido):
-    return total(pedido).subtrair(calcular_desconto(pedido.cliente.tipo, total(pedido)))
+    def calcular_valor_a_pagar(self):
+        return self.itens.calcular_total().subtrair(self.calcular_desconto())
 
 
 def pagar(pedido):
     if pedido.get_status().esta_aberto():
-        if len(pedido.itens) > 0:
+        if not pedido.itens.esta_vazia():
             pedido.set_status("P")
             return True
         else:
@@ -165,33 +164,41 @@ def cancelar(pedido):
         return False
 
 
-def relatorio():
-    for pedido in pedidos:
-        print("Pedido", pedido.numero, "-", pedido.cliente.nome, "-", pedido.cliente.cidade)
-        print("  status:", pedido.get_status().descricao())
-        for item in pedido.itens:
-            print("  ", item.quantidade, "x", item.produto.nome, "=", item.produto.preco.multiplicar(item.quantidade))
-        if len(pedido.itens) > 0:
-            print("  total:", total(pedido), "| desconto:", calcular_desconto(pedido.cliente.tipo, total(pedido)), "| a pagar:", calcular_valor_a_pagar(pedido))
+class Pedidos:
+    def __init__(self):
+        self._pedidos = {}
 
+    def criar(self, numero, cliente):
+        pedido = Pedido(cliente)
+        self._pedidos[numero] = pedido
+        return pedido
 
-def arrecadado():
-    total_arrecadado = Dinheiro(0)
-    for pedido in pedidos:
-        if pedido.get_status().codigo == Status.PAGO:
-            total_arrecadado = total_arrecadado.somar(calcular_valor_a_pagar(pedido))
-    return total_arrecadado
+    def relatorio(self):
+        for numero, pedido in self._pedidos.items():
+            print("Pedido", numero, "-", pedido.cliente.nome, "-", pedido.cliente.cidade)
+            print("  status:", pedido.get_status().descricao())
+            pedido.itens.imprimir()
+            if not pedido.itens.esta_vazia():
+                print("  total:", pedido.itens.calcular_total(), "| desconto:", pedido.calcular_desconto(), "| a pagar:", pedido.calcular_valor_a_pagar())
 
+    def arrecadado(self):
+        total_arrecadado = Dinheiro(0)
+        for pedido in self._pedidos.values():
+            if pedido.get_status().codigo == Status.PAGO:
+                total_arrecadado = total_arrecadado.somar(pedido.calcular_valor_a_pagar())
+        return total_arrecadado
 
-def qtd_abertos():
-    quantidade = 0
-    for pedido in pedidos:
-        if pedido.get_status().esta_aberto():
-            quantidade = quantidade + 1
-    return quantidade
+    def qtd_abertos(self):
+        quantidade = 0
+        for pedido in self._pedidos.values():
+            if pedido.get_status().esta_aberto():
+                quantidade = quantidade + 1
+        return quantidade
 
 
 # --- o roteiro da loja (o TF mantem esta saida identica) -----------------------
+loja = Pedidos()
+
 caderno = Produto("Caderno", 15.5)
 caneta = Produto("Caneta", 2.5)
 livro = Produto("Livro", 89.5)
@@ -199,58 +206,57 @@ fone = Produto("Fone", 60.0)
 
 try:
     ana = Cliente("Ana Souza", "12345678901", "ana@mail.com", "Rua das Flores, 10", "Sorocaba", "18010000", "V")
-    pedido_da_ana = novo_pedido(1, ana)
-    add_item(pedido_da_ana, caderno, 2)
-    add_item(pedido_da_ana, caneta, 5)
+    pedido_da_ana = loja.criar(1, ana)
+    pedido_da_ana.itens.adicionar(caderno, 2)
+    pedido_da_ana.itens.adicionar(caneta, 5)
 except ValueError as erro:
     print("pedido 1 recusado:", erro)
     pedido_da_ana = None
 
 try:
     bruno = Cliente("Bruno Lima", "123", "bruno@mail.com", "Av. Central, 200", "Votorantim", "18110000", "N")
-    novo_pedido(2, bruno)
+    loja.criar(2, bruno)
 except ValueError as erro:
     print("pedido 2 recusado:", erro)
 
 try:
-    ana_ja_existe = ana
-    pedido_da_ana_2 = novo_pedido(3, ana_ja_existe)
-    add_item(pedido_da_ana_2, livro, 1)
+    pedido_da_ana_2 = loja.criar(3, ana)
+    pedido_da_ana_2.itens.adicionar(livro, 1)
 except ValueError as erro:
     print("pedido 3 recusado:", erro)
     pedido_da_ana_2 = None
 
 try:
     carla = Cliente("Carla Dias", "98765432100", "carla.mail.com", "Rua do Sol, 55", "Sorocaba", "18020000", "F")
-    novo_pedido(4, carla)
+    loja.criar(4, carla)
 except ValueError as erro:
     print("pedido 4 recusado:", erro)
 
 try:
     diego = Cliente("Diego Rocha", "11122233344", "diego@mail.com", "Rua Nova, 7", "Itu", "13300000", "N")
-    pedido_do_diego = novo_pedido(5, diego)
+    pedido_do_diego = loja.criar(5, diego)
 except ValueError as erro:
     print("pedido 5 recusado:", erro)
     pedido_do_diego = None
 
 try:
     eva = Cliente("Eva Nunes", "55566677788", "eva@mail.com", "Alameda Azul, 1", "Itu", "13300001", "F")
-    pedido_da_eva = novo_pedido(6, eva)
-    add_item(pedido_da_eva, fone, 1)
+    pedido_da_eva = loja.criar(6, eva)
+    pedido_da_eva.itens.adicionar(fone, 1)
 except ValueError as erro:
     print("pedido 6 recusado:", erro)
     pedido_da_eva = None
 
 try:
     fabio = Cliente("Fabio Costa", "99988877766", "fabio@mail.com", "Rua Velha, 3", "Itu", "123", "N")
-    novo_pedido(7, fabio)
+    loja.criar(7, fabio)
 except ValueError as erro:
     print("pedido 7 recusado:", erro)
 
 try:
     gil = Cliente("Gil Alves", "44455566677", "gil@mail.com", "Rua do Meio, 9", "Sorocaba", "18030000", "N")
-    pedido_do_gil = novo_pedido(8, gil)
-    add_item(pedido_do_gil, fone, 2)
+    pedido_do_gil = loja.criar(8, gil)
+    pedido_do_gil.itens.adicionar(fone, 2)
 except ValueError as erro:
     print("pedido 8 recusado:", erro)
     pedido_do_gil = None
@@ -262,6 +268,6 @@ print("pagar 6:", pagar(pedido_da_eva))
 print("cancelar 5:", cancelar(pedido_do_diego))
 print("cancelar 1:", cancelar(pedido_da_ana))
 
-relatorio()
-print("arrecadado:", arrecadado())
-print("abertos:", qtd_abertos())
+loja.relatorio()
+print("arrecadado:", loja.arrecadado())
+print("abertos:", loja.qtd_abertos())
