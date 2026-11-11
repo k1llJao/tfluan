@@ -61,22 +61,34 @@ class Status:
     PAGO = "P"
     CANCELADO = "C"
 
+    _descricoes = {ABERTO: "aberto", PAGO: "pago", CANCELADO: "cancelado"}
+
     def __init__(self, codigo="A"):
         self._codigo = codigo
 
     def descricao(self):
-        if self._codigo == Status.ABERTO:
-            return "aberto"
-        elif self._codigo == Status.PAGO:
-            return "pago"
-        else:
-            return "cancelado"
+        return Status._descricoes[self._codigo]
 
     def esta_aberto(self):
         return self._codigo == Status.ABERTO
 
     def esta_pago(self):
         return self._codigo == Status.PAGO
+
+
+class TipoNormal:
+    def desconto_sobre(self, valor):
+        return Dinheiro(0)
+
+
+class TipoVip:
+    def desconto_sobre(self, valor):
+        return valor.percentual(0.10)
+
+
+class TipoFuncionario:
+    def desconto_sobre(self, valor):
+        return valor.percentual(0.20)
 
 
 class Pessoa:
@@ -97,7 +109,7 @@ class Cliente:
     def __init__(self, nome, cpf, email, rua, cidade, cep, tipo):
         self.pessoa = Pessoa(nome, cpf, email)
         self.endereco = Endereco(rua, cidade, cep)
-        self.tipo = tipo          # tipo do cliente: "N" normal, "V" vip, "F" funcionario
+        self.tipo = tipo          # objeto TipoNormal, TipoVip ou TipoFuncionario
 
     def nome_da_pessoa(self):
         return self.pessoa.nome
@@ -168,32 +180,24 @@ class Pedido:
 
     def calcular_desconto(self):
         total_acumulado = self.itens.calcular_total()
-        if self.cliente.tipo == "V":
-            return total_acumulado.percentual(0.10)
-        elif self.cliente.tipo == "F":
-            return total_acumulado.percentual(0.20)
-        else:
-            return Dinheiro(0)
+        return self.cliente.tipo.desconto_sobre(total_acumulado)
 
     def calcular_valor_a_pagar(self):
         return self.itens.calcular_total().subtrair(self.calcular_desconto())
 
     def pagar(self):
-        if self._status.esta_aberto():
-            if not self.itens.esta_vazia():
-                self._status = Status(Status.PAGO)
-                return True
-            else:
-                return False
-        else:
+        if not self._status.esta_aberto():
             return False
+        if self.itens.esta_vazia():
+            return False
+        self._status = Status(Status.PAGO)
+        return True
 
     def cancelar(self):
-        if self._status.esta_aberto():
-            self._status = Status(Status.CANCELADO)
-            return True
-        else:
+        if not self._status.esta_aberto():
             return False
+        self._status = Status(Status.CANCELADO)
+        return True
 
 
 class Pedidos:
@@ -237,7 +241,7 @@ livro = Produto("Livro", 89.5)
 fone = Produto("Fone", 60.0)
 
 try:
-    ana = Cliente("Ana Souza", "12345678901", "ana@mail.com", "Rua das Flores, 10", "Sorocaba", "18010000", "V")
+    ana = Cliente("Ana Souza", "12345678901", "ana@mail.com", "Rua das Flores, 10", "Sorocaba", "18010000", TipoVip())
     pedido_da_ana = loja.criar(1, ana)
     pedido_da_ana.itens.adicionar(caderno, 2)
     pedido_da_ana.itens.adicionar(caneta, 5)
@@ -246,7 +250,7 @@ except ValueError as erro:
     pedido_da_ana = None
 
 try:
-    bruno = Cliente("Bruno Lima", "123", "bruno@mail.com", "Av. Central, 200", "Votorantim", "18110000", "N")
+    bruno = Cliente("Bruno Lima", "123", "bruno@mail.com", "Av. Central, 200", "Votorantim", "18110000", TipoNormal())
     loja.criar(2, bruno)
 except ValueError as erro:
     print("pedido 2 recusado:", erro)
@@ -259,20 +263,20 @@ except ValueError as erro:
     pedido_da_ana_2 = None
 
 try:
-    carla = Cliente("Carla Dias", "98765432100", "carla.mail.com", "Rua do Sol, 55", "Sorocaba", "18020000", "F")
+    carla = Cliente("Carla Dias", "98765432100", "carla.mail.com", "Rua do Sol, 55", "Sorocaba", "18020000", TipoFuncionario())
     loja.criar(4, carla)
 except ValueError as erro:
     print("pedido 4 recusado:", erro)
 
 try:
-    diego = Cliente("Diego Rocha", "11122233344", "diego@mail.com", "Rua Nova, 7", "Itu", "13300000", "N")
+    diego = Cliente("Diego Rocha", "11122233344", "diego@mail.com", "Rua Nova, 7", "Itu", "13300000", TipoNormal())
     pedido_do_diego = loja.criar(5, diego)
 except ValueError as erro:
     print("pedido 5 recusado:", erro)
     pedido_do_diego = None
 
 try:
-    eva = Cliente("Eva Nunes", "55566677788", "eva@mail.com", "Alameda Azul, 1", "Itu", "13300001", "F")
+    eva = Cliente("Eva Nunes", "55566677788", "eva@mail.com", "Alameda Azul, 1", "Itu", "13300001", TipoFuncionario())
     pedido_da_eva = loja.criar(6, eva)
     pedido_da_eva.itens.adicionar(fone, 1)
 except ValueError as erro:
@@ -280,13 +284,13 @@ except ValueError as erro:
     pedido_da_eva = None
 
 try:
-    fabio = Cliente("Fabio Costa", "99988877766", "fabio@mail.com", "Rua Velha, 3", "Itu", "123", "N")
+    fabio = Cliente("Fabio Costa", "99988877766", "fabio@mail.com", "Rua Velha, 3", "Itu", "123", TipoNormal())
     loja.criar(7, fabio)
 except ValueError as erro:
     print("pedido 7 recusado:", erro)
 
 try:
-    gil = Cliente("Gil Alves", "44455566677", "gil@mail.com", "Rua do Meio, 9", "Sorocaba", "18030000", "N")
+    gil = Cliente("Gil Alves", "44455566677", "gil@mail.com", "Rua do Meio, 9", "Sorocaba", "18030000", TipoNormal())
     pedido_do_gil = loja.criar(8, gil)
     pedido_do_gil.itens.adicionar(fone, 2)
 except ValueError as erro:
